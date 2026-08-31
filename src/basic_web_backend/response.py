@@ -8,7 +8,7 @@ MIME_TYPES = {
     ".htm": "text/html",
     ".css": "text/css",
     ".js": "application/javascript",
-    "json": "application/json",
+    ".json": "application/json",
     ".txt": "text/plain",
     ".xml": "application/xml",
     ".csv": "text/csv",
@@ -64,7 +64,7 @@ REDIRECT_STATUS_CODES = {
 
 def _prepare_headers(default_content_type=None, headers=None):
     if headers is None:
-        headers = {}
+        response_headers = {}
     else:
         response_headers = dict(headers)
 
@@ -122,6 +122,9 @@ def file_response(file_path, status_code=200, headers=None, as_attachment=False,
     return body, status_code, response_headers
 
 def redirect_response(location, status_code=302, headers=None):
+    if status_code not in REDIRECT_STATUS_CODES:
+        raise ValueError(f"Invalid redirect status code: {status_code}")
+
     response_headers = _prepare_headers(headers=headers)
     response_headers["Location"] = location
     return "", status_code, response_headers
