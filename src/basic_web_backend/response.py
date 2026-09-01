@@ -71,7 +71,7 @@ def _prepare_headers(default_content_type=None, headers=None):
     has_content_type = any(
         name.lower() == "content-type" for name in response_headers)
 
-    if not has_content_type:
+    if default_content_type and not has_content_type:
         response_headers["Content-Type"] = default_content_type
 
     return response_headers
@@ -132,3 +132,4 @@ def redirect_response(location, status_code=302, headers=None):
 def empty_response(status_code=204, headers=None):
     response_headers = _prepare_headers(headers=headers)
     return b"", status_code, response_headers
+

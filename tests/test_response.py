@@ -96,7 +96,7 @@ def test_file_response_creates_attachment_header_with_safe_filename(tmp_path):
 @pytest.mark.parametrize("status_code", REDIRECT_STATUS_CODES)
 def test_redirect_response_accepts_valid_status_codes(status_code):
     result = redirect_response(location="/new-location", status_code=status_code, headers={"X-Custom-Header": "Custom Value"})
-    assert result == ("", status_code, {"X-Custom-Header": "Custom Value", "Content-Type": None, "Location": "/new-location"})
+    assert result == ("", status_code, {"X-Custom-Header": "Custom Value", "Location": "/new-location"})
 
 def test_redirect_response_rejects_invalid_status_code():
     with pytest.raises(ValueError, match="Invalid redirect status code: 200"):
@@ -104,6 +104,6 @@ def test_redirect_response_rejects_invalid_status_code():
 
 def test_empty_response_returns():
     result = empty_response(status_code=204, headers={"X-Custom-Header": "Custom Value"})
-    assert result == (b"", 204, {"X-Custom-Header": "Custom Value", "Content-Type": None})
+    assert result == (b"", 204, {"X-Custom-Header": "Custom Value"})
 
 
