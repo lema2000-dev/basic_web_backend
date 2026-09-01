@@ -1,3 +1,5 @@
+import pytest
+
 from basic_web_backend.request import Request
 
 def test_request_has_default_values():

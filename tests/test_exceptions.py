@@ -1,3 +1,5 @@
+import pytest
+
 from basic_web_backend.exceptions import (
     BackendError,
     RoutingError,

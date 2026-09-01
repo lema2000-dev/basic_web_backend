@@ -1,3 +1,5 @@
+import pytest
+
 from basic_web_backend.adapters import LemaRequestAdapter, LemaResponseAdapter
 from basic_web_backend.config import ApplicationConfig
 
