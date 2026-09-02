@@ -33,3 +33,6 @@ docs_private/
 # Környezeti változók és titkos adatok
 .env
 .env.*
+
+#Logging
+*.log

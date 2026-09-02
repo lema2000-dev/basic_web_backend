@@ -29,5 +29,3 @@ class Request:
     def get_headers(self, name):
         normalized_name = name.lower()
         return [value for header_name, value in self.headers if header_name == normalized_name]
-
-    
