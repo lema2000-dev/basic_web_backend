@@ -93,4 +93,55 @@ def test_application_passes_dynamic_parameters_to_view():
 
     assert result == {"converted": "Profile of johndoe"}
     assert response_adapter.received_response == "Profile of johndoe"
-    
+
+def test_application_returns_404_for_unknown_path():
+    app, _, response_adapter = create_application()
+
+    result = app({"method": "GET", "path": "/unknown"})
+
+    body, status_code, headers = response_adapter.received_response
+
+    assert status_code == 404
+    assert "404" in body
+    assert "Not Found" in body
+    assert headers == {
+        "Content-Type": "text/html; charset=utf-8"
+    }
+    assert result == {"converted": (body, status_code, headers)}
+
+def test_application_returns_405_for_unsupported_method():
+    app, _, response_adapter = create_application()
+
+    @app.route("/users", methods=["GET"])
+    def users(request):
+        return "Users"
+
+    app({"method": "POST", "path": "/users"})
+
+    body, status_code, headers = response_adapter.received_response
+    assert status_code == 405
+    assert "405" in body
+    assert "Method Not Allowed" in body
+    assert headers == {
+        "Content-Type": "text/html; charset=utf-8",
+        "Allow": "GET"
+    }
+
+def test_application_returns_500_for_unhandled_exception():
+    app, _, response_adapter = create_application()
+
+    @app.route("/")
+    def index(request):
+        raise ValueError("Unexpected error")
+
+    app({"method": "GET", "path": "/"})
+
+    body, status_code, headers = response_adapter.received_response
+
+    assert status_code == 500
+    assert "500" in body
+    assert "Internal Server Error" in body
+    assert headers == {
+        "Content-Type": "text/html; charset=utf-8"
+    }
+    assert "Unexpected error" not in body
