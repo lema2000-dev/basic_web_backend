@@ -33,3 +33,13 @@ def test_application_configs_have_separate_default_adapters():
 
     assert config1.request_adapter is not config2.request_adapter
     assert config1.response_adapter is not config2.response_adapter 
+
+def test_application_config_debug_by_default():
+    config = ApplicationConfig()
+    assert config.debug is False
+
+def test_application_config_accepts_debug_mode():
+    config = ApplicationConfig(debug=True)
+    assert config.debug is True
+
+    
