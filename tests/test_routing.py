@@ -2,8 +2,10 @@ import pytest
 
 from basic_web_backend.exceptions import (
     DuplicateRouteError,
+    InvalidRouteError,
     MethodNotAllowed,
     NotFound,
+    AmbiguousRouteError
 )
 from basic_web_backend.routing import Router, RouteMatch
 
@@ -183,4 +185,178 @@ def test_dynamic_route_raises_method_not_allowed():
     assert error.path == "/users/johndoe"
     assert error.allowed_methods == ("GET", "HEAD")
 
-    
+def test_add_route_rejects_ambiguous_dynamic_routes():
+    router = Router()
+
+    def find_by_name(request, name):
+        return name
+
+    def find_by_id(request, id):
+        return id
+
+    router.add_route(
+        path="/search/<string:name>",
+        view=find_by_name,
+        methods=["GET"]
+    )
+
+    with pytest.raises(AmbiguousRouteError):
+        router.add_route(
+            path="/search/<int:id>",
+            view=find_by_id,
+            methods=["GET"]
+        )
+
+def test_dynamic_routes_with_different_methods_are_not_ambiguous():
+    router = Router()
+
+    def read_item(request, item_name):
+        return item_name
+
+    def update_item(request, item_id):
+        return item_id
+
+    router.add_route(
+        path="/items/<string:item_name>",
+        view=read_item,
+        methods=["GET"]
+    )
+
+    router.add_route(
+        path="/items/<int:item_id>",
+        view=update_item,
+        methods=["POST"]
+    )
+
+    get_route_match = router.match_route(path="/items/widget", method="GET")
+
+    assert get_route_match.view is read_item
+    assert get_route_match.parameters == {"item_name": "widget"}
+
+    post_route_match = router.match_route(path="/items/42", method="POST")
+
+    assert post_route_match.view is update_item
+    assert post_route_match.parameters == {"item_id": 42}
+
+
+def test_add_route_rejects_non_final_path_converter():
+    router = Router()
+
+    def download(request, filename):
+        return filename
+
+    with pytest.raises(InvalidRouteError):
+        router.add_route(
+            path="/files/<path:filename>/download",
+            view=download,
+            methods=["GET"],
+        )
+
+def test_add_route_accepts_final_path_converter():
+    router = Router()
+
+    def serve_file(request, filename):
+        return filename
+
+    router.add_route(
+        path="/files/<path:filename>",
+        view=serve_file,
+        methods=["GET"],
+    )
+
+    route_match = router.match_route(
+        path="/files/images/logo.png",
+        method="GET",
+    )
+
+    assert route_match.view is serve_file
+    assert route_match.parameters == {
+        "filename": "images/logo.png",
+    }
+
+def test_add_route_rejects_ambiguity_created_by_path_converter():
+    router = Router()
+
+    def serve_file(request, filename):
+        return filename
+
+    def serve_image(request, image_name):
+        return image_name
+
+    router.add_route(
+        path="/files/<path:filename>",
+        view=serve_file,
+        methods=["GET"],
+    )
+
+    with pytest.raises(AmbiguousRouteError):
+        router.add_route(
+            path="/files/images/<string:image_name>",
+            view=serve_image,
+            methods=["GET"],
+        )
+
+def test_add_route_allows_non_overlapping_dynamic_routes():
+    router = Router()
+
+    def find_user(request, value):
+        return value
+
+    def find_product(request, value):
+        return value
+
+    router.add_route(
+        path="/users/<string:value>",
+        view=find_user,
+        methods=["GET"],
+    )
+
+    router.add_route(
+        path="/products/<int:value>",
+        view=find_product,
+        methods=["GET"],
+    )
+
+    user_match = router.match_route(
+        path="/users/alice",
+        method="GET",
+    )
+    product_match = router.match_route(
+        path="/products/42",
+        method="GET",
+    )
+
+    assert user_match.view is find_user
+    assert product_match.view is find_product
+
+def test_ambiguous_route_is_not_registered():
+    router = Router()
+
+    def find_by_name(request, name):
+        return name
+
+    def find_by_id(request, item_id):
+        return item_id
+
+    router.add_route(
+        path="/search/<string:name>",
+        view=find_by_name,
+        methods=["GET"],
+    )
+
+    with pytest.raises(AmbiguousRouteError):
+        router.add_route(
+            path="/search/<int:item_id>",
+            view=find_by_id,
+            methods=["GET"],
+        )
+
+    route_match = router.match_route(
+        path="/search/42",
+        method="GET",
+    )
+
+    assert route_match.view is find_by_name
+    assert route_match.parameters == {
+        "name": "42",
+    }

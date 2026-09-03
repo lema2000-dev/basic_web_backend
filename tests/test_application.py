@@ -1,9 +1,18 @@
+import pytest
+
 from basic_web_backend.application import WebApplication
 from basic_web_backend.config import ApplicationConfig
 from basic_web_backend.request import Request
 from basic_web_backend.exceptions import (
+    BadRequest,
+    Conflict,
+    Forbidden,
     MethodNotAllowed,
     NotFound,
+    PayloadTooLarge,
+    Unauthorized,
+    UnprocessableContent,
+    UnsupportedMediaType,
 )
 import basic_web_backend.response as ResponseModule
 
@@ -285,3 +294,67 @@ def test_custom_500_handler_has_priority_in_debug_mode():
         "Custom debug error page", 500,
         {"Content-Type": "text/plain; charset=utf-8"}
     )
+
+def test_application_converts_bad_request_to_400_response():
+    app, _, response_adapter = create_application()
+
+    @app.route("/products")
+    def products(request):
+        raise BadRequest(
+            "The price query parameter must be a number."
+        )
+
+    app(
+        {
+            "method": "GET",
+            "path": "/products",
+        }
+    )
+
+    body, status_code, headers = (
+        response_adapter.received_response
+    )
+
+    assert status_code == 400
+    assert "400 Bad Request" in body
+    assert (
+        "The price query parameter must be a number."
+        in body
+    )
+    assert headers == {
+        "Content-Type": "text/html; charset=utf-8",
+    }
+
+@pytest.mark.parametrize(
+    ("error", "expected_status_code"),
+    [
+        (Unauthorized(), 401),
+        (Forbidden(), 403),
+        (Conflict(), 409),
+        (PayloadTooLarge(), 413),
+        (UnsupportedMediaType(), 415),
+        (UnprocessableContent(), 422),
+    ],
+)
+def test_application_handles_http_exceptions(
+    error,
+    expected_status_code,
+):
+    app, _, response_adapter = create_application()
+
+    @app.route("/")
+    def index(request):
+        raise error
+
+    app(
+        {
+            "method": "GET",
+            "path": "/",
+        }
+    )
+
+    _, status_code, _ = (
+        response_adapter.received_response
+    )
+
+    assert status_code == expected_status_code

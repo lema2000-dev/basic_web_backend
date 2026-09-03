@@ -1,9 +1,11 @@
-from .config import ApplicationConfig
-from .exceptions import MethodNotAllowed, NotFound
-from .response import html_response
-from .routing import Router
 from html import escape
 from traceback import format_exc
+
+from .config import ApplicationConfig
+from .exceptions import HTTPException
+from .response import html_response
+from .routing import Router
+
 
 class WebApplication:
     def __init__(self, config=None):
@@ -37,52 +39,55 @@ class WebApplication:
 
             response = route_match.view(request=request, **route_match.parameters)
 
-        except NotFound as error:
-            handler = self.error_handlers.get(404)
-            if handler is None:
-                response = html_response(
-                    "<h1>404 Not Found</h1>",
-                    status_code=404
-                )
-            else:
-                response = handler(error)
-            
-        except MethodNotAllowed as error:
-            handler = self.error_handlers.get(405)
-            if handler is None:
-                allowed_methods = ", ".join(sorted(error.allowed_methods))
+        except HTTPException as error:
+            response = self._handle_http_exception(error)
 
-                response = html_response(
-                    f"<h1>405 Method Not Allowed</h1>",
-                    status_code=405,
-                    headers={
-                        "Allow": allowed_methods
-                    }
-                )
-            else:
-                response = handler(error)
 
         except Exception as error:
-            handler = self.error_handlers.get(500)
-            if handler is not None:
-                response = handler(error)
-            elif self.config.debug:
-                error_type = type(error).__name__
-                error_message = escape(str(error))
-                traceback_text = format_exc()
-                response = html_response(
-                    "<h1>500 Internal Server Error</h1>"
-                    f"<p><strong>{error_type}:</strong>: "
-                    f"{error_message}</p>"
-                    f"<pre>{escape(traceback_text)}</pre>",
-                    status_code=500
-                )
-            else:
-                response = html_response(
-                    "<h1>500 Internal Server Error</h1>",
-                    status_code=500
-                )
+            response = self._handle_internal_error(error)
 
         return self.config.response_adapter.convert(response)
 
-    
+    def _handle_http_exception(self, error):
+        handler = self.error_handlers.get(error.status_code)
+
+        if handler is not None:
+            return handler(error)
+
+        title = f"{error.status_code} {error.default_message}"
+
+        body = f"<h1>{escape(title)}</h1>"
+
+        if error.message != error.default_message:
+            body += f"<p>{escape(error.message)}</p>"
+
+        return html_response(
+            body=body,
+            status_code=error.status_code,
+            headers=error.headers
+        )
+
+    def _handle_internal_error(self, error):
+        handler = self.error_handlers.get(500)
+
+        if handler is not None:
+            return handler(error)
+
+        if self.config.debug:
+            error_type = type(error).__name__
+            error_message = escape(str(error))
+            error_traceback = escape(format_exc())
+
+            return html_response(
+                body=(
+                    f"<h1>500 Internal Server Error</h1>"
+                    f"<h2>{error_type}: {error_message}</h2>"
+                    f"<pre>{error_traceback}</pre>"
+                ),
+                status_code=500
+            )
+
+        return html_response(
+            body="<h1>500 Internal Server Error</h1>",
+            status_code=500
+        )
