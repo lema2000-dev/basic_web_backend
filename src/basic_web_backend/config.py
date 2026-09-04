@@ -5,7 +5,9 @@ class ApplicationConfig:
         self,
         request_adapter=None,
         response_adapter=None,
-        debug=False
+        debug=False,
+        static_folder="static",
+        static_url_path="/static"
     ):
         if request_adapter is None:
             request_adapter = LemaRequestAdapter()
@@ -16,3 +18,5 @@ class ApplicationConfig:
         self.request_adapter = request_adapter
         self.response_adapter = response_adapter
         self.debug = debug
+        self.static_folder = static_folder
+        self.static_url_path = static_url_path

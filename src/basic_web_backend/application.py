@@ -5,6 +5,7 @@ from .config import ApplicationConfig
 from .exceptions import HTTPException
 from .response import html_response
 from .routing import Router
+from .static import StaticFileHandler
 
 
 class WebApplication:
@@ -15,6 +16,24 @@ class WebApplication:
         self.config = config
         self.router = Router()
         self.error_handlers = {}
+        self.static_handler = None
+
+        if self.config.static_folder is not None:
+            self._register_static_route()
+
+    def _register_static_route(self):
+        static_url_path = ("/" + self.config.static_url_path.strip("/"))
+
+        if static_url_path == "/":
+            route_path = "/<path:filename>"
+        else:
+            route_path = f"{static_url_path}/<path:filename>"
+
+        self.static_handler = StaticFileHandler(static_folder=self.config.static_folder)
+        self.router.add_route(path=route_path, view=self._serve_static_file, methods=["GET"])
+
+    def _serve_static_file(self, request, filename):
+        return self.static_handler.serve(filename=filename)
 
     def route(self, path, methods=None):
         def decorator(view):

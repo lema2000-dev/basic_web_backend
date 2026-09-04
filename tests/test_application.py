@@ -358,3 +358,164 @@ def test_application_handles_http_exceptions(
     )
 
     assert status_code == expected_status_code
+
+def test_application_serves_static_file(
+    tmp_path,
+):
+    static_folder = tmp_path / "static"
+    static_folder.mkdir()
+
+    css_file = static_folder / "style.css"
+    css_file.write_text(
+        "body { color: blue; }",
+        encoding="utf-8",
+    )
+
+    request_adapter = FakeRequestAdapter()
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=request_adapter,
+        response_adapter=response_adapter,
+        static_folder=static_folder,
+    )
+
+    app = WebApplication(config=config)
+
+    result = app(
+        {
+            "method": "GET",
+            "path": "/static/style.css",
+        }
+    )
+
+    expected_response = (
+        b"body { color: blue; }",
+        200,
+        {
+            "Content-Type": "text/css",
+        },
+    )
+
+    assert (
+        response_adapter.received_response
+        == expected_response
+    )
+    assert result == {
+        "converted": expected_response,
+    }
+
+def test_application_accepts_custom_static_url_path(
+    tmp_path,
+):
+    static_folder = tmp_path / "assets"
+    static_folder.mkdir()
+
+    javascript_file = (
+        static_folder / "application.js"
+    )
+    javascript_file.write_text(
+        "console.log('Hello');",
+        encoding="utf-8",
+    )
+
+    request_adapter = FakeRequestAdapter()
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=request_adapter,
+        response_adapter=response_adapter,
+        static_folder=static_folder,
+        static_url_path="/assets",
+    )
+
+    app = WebApplication(config=config)
+
+    app(
+        {
+            "method": "GET",
+            "path": "/assets/application.js",
+        }
+    )
+
+    assert response_adapter.received_response == (
+        b"console.log('Hello');",
+        200,
+        {
+            "Content-Type": "application/javascript",
+        },
+    )
+
+def test_application_can_disable_static_files(
+    tmp_path,
+):
+    static_folder = tmp_path / "static"
+    static_folder.mkdir()
+
+    css_file = static_folder / "style.css"
+    css_file.write_text(
+        "body {}",
+        encoding="utf-8",
+    )
+
+    request_adapter = FakeRequestAdapter()
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=request_adapter,
+        response_adapter=response_adapter,
+        static_folder=None,
+    )
+
+    app = WebApplication(config=config)
+
+    app(
+        {
+            "method": "GET",
+            "path": "/static/style.css",
+        }
+    )
+
+    _, status_code, _ = (
+        response_adapter.received_response
+    )
+
+    assert status_code == 404
+
+def test_static_route_only_accepts_get_method(
+    tmp_path,
+):
+    static_folder = tmp_path / "static"
+    static_folder.mkdir()
+
+    css_file = static_folder / "style.css"
+    css_file.write_text(
+        "body {}",
+        encoding="utf-8",
+    )
+
+    request_adapter = FakeRequestAdapter()
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=request_adapter,
+        response_adapter=response_adapter,
+        static_folder=static_folder,
+    )
+
+    app = WebApplication(config=config)
+
+    app(
+        {
+            "method": "POST",
+            "path": "/static/style.css",
+        }
+    )
+
+    body, status_code, headers = (
+        response_adapter.received_response
+    )
+
+    assert status_code == 405
+    assert "Method Not Allowed" in body
+    assert headers["Allow"] == "GET"

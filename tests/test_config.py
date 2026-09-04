@@ -42,4 +42,30 @@ def test_application_config_accepts_debug_mode():
     config = ApplicationConfig(debug=True)
     assert config.debug is True
 
-    
+def test_application_config_has_default_static_settings():
+    config = ApplicationConfig()
+
+    assert config.static_folder == "static"
+    assert config.static_url_path == "/static"
+
+
+def test_application_config_accepts_custom_static_settings(
+    tmp_path,
+):
+    static_folder = tmp_path / "assets"
+
+    config = ApplicationConfig(
+        static_folder=static_folder,
+        static_url_path="/assets",
+    )
+
+    assert config.static_folder == static_folder
+    assert config.static_url_path == "/assets"
+
+
+def test_application_config_can_disable_static_files():
+    config = ApplicationConfig(
+        static_folder=None
+    )
+
+    assert config.static_folder is None
