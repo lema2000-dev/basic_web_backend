@@ -1,32 +1,52 @@
-const button = document.querySelector(
-    "#load-message"
+const form = document.querySelector(
+    "#message-form"
+);
+
+const nameInput = document.querySelector(
+    "#name"
 );
 
 const message = document.querySelector(
     "#message"
 );
 
-button.addEventListener("click", async () => {
-    message.textContent = "Loading...";
+form.addEventListener(
+    "submit",
+    async (event) => {
+        event.preventDefault();
 
-    try {
-        const response = await fetch(
-            "/api/message?name=Martin"
-        );
+        message.textContent = "Loading...";
 
-        if (!response.ok) {
-            throw new Error(
-                `HTTP error: ${response.status}`
+        try {
+            const response = await fetch(
+                "/api/message",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body: JSON.stringify({
+                        name: nameInput.value
+                    })
+                }
             );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.detail
+                    ?? `HTTP error: ${response.status}`
+                );
+            }
+
+            message.textContent = data.message;
+        } catch (error) {
+            message.textContent =
+                "The message could not be loaded.";
+
+            console.error(error);
         }
-
-        const data = await response.json();
-
-        message.textContent = data.message;
-    } catch (error) {
-        message.textContent =
-            "The message could not be loaded.";
-
-        console.error(error);
     }
-});
+);

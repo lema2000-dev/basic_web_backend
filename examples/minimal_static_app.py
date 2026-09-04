@@ -52,25 +52,38 @@ def index(request):
                     backend view.
                 </p>
 
-                <button id="load-message">
-                    Load dynamic message
-                </button>
+                <form id="message-form">
+                    <label for="name">
+                        Name:
+                    </label>
+
+                    <input
+                        id="name"
+                        name="name"
+                        value="Martin"
+                        required
+                    >
+
+                    <button type="submit">
+                        Send JSON request
+                    </button>
+                </form>
 
                 <p id="message">
-                    No message loaded yet.
+                    No message received yet.
                 </p>
-            </main>
         </body>
         </html>
         """
     )
 
-@app.route(path="/api/message")
+@app.route(path="/api/message", methods=["POST"])
 def api_message(request):
-    name = request.query.get("name", ["Visitor"])[0]
+    data = request.get_json()
+    name = data.get("name")
 
     return json_response(
-        data={"message": f"Hello, {name}! This message came from the backend."}
+        data={"message": f"Hello, {name}! Your JSON request was processed."}
 
     )
 
