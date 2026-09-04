@@ -69,3 +69,16 @@ def test_application_config_can_disable_static_files():
     )
 
     assert config.static_folder is None
+
+def test_application_config_has_no_body_size_limit_by_default():
+    config = ApplicationConfig()
+
+    assert config.max_content_length is None
+
+
+def test_application_config_accepts_maximum_content_length():
+    config = ApplicationConfig(
+        max_content_length=1024
+    )
+
+    assert config.max_content_length == 1024

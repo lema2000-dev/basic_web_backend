@@ -2,7 +2,7 @@ from html import escape
 from traceback import format_exc
 
 from .config import ApplicationConfig
-from .exceptions import HTTPException
+from .exceptions import BadRequest, HTTPException, PayloadTooLarge
 from .response import html_response
 from .routing import Router
 from .static import StaticFileHandler
@@ -53,6 +53,8 @@ class WebApplication:
             request = self.config.request_adapter.convert(
                 server_request
             )
+
+            self._check_content_length(request)
 
             route_match = self.router.match_route(path=request.path, method=request.method)
 
@@ -110,3 +112,19 @@ class WebApplication:
             body="<h1>500 Internal Server Error</h1>",
             status_code=500
         )
+
+    def _check_content_length(self, request):
+        limit = self.config.max_content_length
+
+        if limit is None:
+            return
+
+        body = request.body
+
+        if isinstance(body, str):
+            body_length = len(body.encode("utf-8"))
+        else:
+            body_length = len(body)
+
+        if body_length > limit:
+            raise PayloadTooLarge(f"The request body exceeds the {limit}-byte limit.")

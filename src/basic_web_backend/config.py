@@ -7,7 +7,8 @@ class ApplicationConfig:
         response_adapter=None,
         debug=False,
         static_folder="static",
-        static_url_path="/static"
+        static_url_path="/static",
+        max_content_length=None
     ):
         if request_adapter is None:
             request_adapter = LemaRequestAdapter()
@@ -20,3 +21,4 @@ class ApplicationConfig:
         self.debug = debug
         self.static_folder = static_folder
         self.static_url_path = static_url_path
+        self.max_content_length = max_content_length
