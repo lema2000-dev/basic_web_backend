@@ -6,6 +6,7 @@ from basic_web_backend.response import (
     MIME_TYPES,
     REDIRECT_STATUS_CODES,
     content_response,
+    delete_cookie,
     empty_response,
     file_response,
     guess_content_type,
@@ -235,6 +236,35 @@ def test_set_cookie_preserves_multiple_cookies():
         "abc123"
     )
     assert cookies["theme"].value == "dark"
+
+def test_delete_cookie_expires_cookie():
+    response = text_response("Logged out")
+
+    body, status_code, headers = (
+        delete_cookie(
+            response=response,
+            key="session_id",
+            path="/",
+        )
+    )
+
+    cookie_header = next(
+        value
+        for name, value in headers
+        if name.lower() == "set-cookie"
+    )
+
+    cookie = SimpleCookie()
+    cookie.load(cookie_header)
+
+    morsel = cookie["session_id"]
+
+    assert morsel.value == ""
+    assert morsel["max-age"] == "0"
+    assert morsel["expires"] == (
+        "Thu, 01 Jan 1970 00:00:00 GMT"
+    )
+    assert morsel["path"] == "/"
 
 def test_set_cookie_does_not_mutate_original_headers():
     original_response = html_response(

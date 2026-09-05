@@ -193,32 +193,5 @@ def delete_cookie(response, key, path="/", domain=None):
         domain=domain
     )
         
-def test_delete_cookie_expires_cookie():
-    response = text_response("Logged out")
 
-    body, status_code, headers = (
-        delete_cookie(
-            response=response,
-            key="session_id",
-            path="/",
-        )
-    )
-
-    cookie_header = next(
-        value
-        for name, value in headers
-        if name.lower() == "set-cookie"
-    )
-
-    cookie = SimpleCookie()
-    cookie.load(cookie_header)
-
-    morsel = cookie["session_id"]
-
-    assert morsel.value == ""
-    assert morsel["max-age"] == "0"
-    assert morsel["expires"] == (
-        "Thu, 01 Jan 1970 00:00:00 GMT"
-    )
-    assert morsel["path"] == "/"
 
