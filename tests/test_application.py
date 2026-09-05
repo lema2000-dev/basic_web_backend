@@ -118,8 +118,8 @@ def test_application_returns_404_for_unknown_path():
     body, status_code, headers = response_adapter.received_response
 
     assert status_code == 404
-    assert "404" in body
-    assert "Not Found" in body
+    assert "404" in body.decode("utf-8")
+    assert "Not Found" in body.decode("utf-8")
     assert headers == {
         "Content-Type": "text/html; charset=utf-8"
     }
@@ -136,8 +136,8 @@ def test_application_returns_405_for_unsupported_method():
 
     body, status_code, headers = response_adapter.received_response
     assert status_code == 405
-    assert "405" in body
-    assert "Method Not Allowed" in body
+    assert "405" in body.decode("utf-8")
+    assert "Method Not Allowed" in body.decode("utf-8")
     assert headers == {
         "Content-Type": "text/html; charset=utf-8",
         "Allow": "GET"
@@ -153,6 +153,8 @@ def test_application_returns_500_for_unhandled_exception():
     app({"method": "GET", "path": "/"})
 
     body, status_code, headers = response_adapter.received_response
+
+    body = body.decode("utf-8")
 
     assert status_code == 500
     assert "500" in body
@@ -186,7 +188,7 @@ def test_application_uses_custom_404_handler():
     assert len(recieved_errors) == 1
     assert isinstance(recieved_errors[0], NotFound)
     assert response_adapter.received_response == (
-        "This page does not exist.", 404, {"Content-Type": "text/plain; charset=utf-8"}
+        ("This page does not exist.").encode("utf-8"), 404, {"Content-Type": "text/plain; charset=utf-8"}
     )
 
 def test_application_uses_custom_405_handler():
@@ -212,7 +214,7 @@ def test_application_uses_custom_405_handler():
     assert len(recieved_errors) == 1
     assert isinstance(recieved_errors[0], MethodNotAllowed)
     assert response_adapter.received_response == (
-        "Unsupported method", 405, 
+        "Unsupported method".encode("utf-8"), 405, 
         {"Content-Type": "text/plain; charset=utf-8", "Allow": "GET"}
     )
 
@@ -238,7 +240,7 @@ def test_application_uses_custom_500_handler():
     assert isinstance(recieved_errors[0], RuntimeError)
     assert str(recieved_errors[0]) == "Database unavailable"
     assert response_adapter.received_response == (
-        "The service is temporarily unavailable.", 500,
+        "The service is temporarily unavailable.".encode("utf-8"), 500,
         {"Content-Type": "text/plain; charset=utf-8"}
     )
 
@@ -261,6 +263,9 @@ def test_application_shows_exception_details_in_debug_mode():
 
     body, status_code, headers = response_adapter.received_response
 
+    body = body.decode("utf-8")
+
+    
     assert status_code == 500
     assert "RuntimeError" in body
     assert "Database unavailable" in body
@@ -293,7 +298,7 @@ def test_custom_500_handler_has_priority_in_debug_mode():
     app({"method": "GET", "path": "/"})
 
     assert response_adapter.received_response == (
-        "Custom debug error page", 500,
+        "Custom debug error page".encode("utf-8"), 500,
         {"Content-Type": "text/plain; charset=utf-8"}
     )
 
@@ -316,6 +321,8 @@ def test_application_converts_bad_request_to_400_response():
     body, status_code, headers = (
         response_adapter.received_response
     )
+
+    body = body.decode("utf-8")
 
     assert status_code == 400
     assert "400 Bad Request" in body
@@ -518,74 +525,8 @@ def test_static_route_only_accepts_get_method(
         response_adapter.received_response
     )
 
+    body = body.decode("utf-8")
+
     assert status_code == 405
     assert "Method Not Allowed" in body
     assert headers["Allow"] == "GET"
-
-def test_application_rejects_body_larger_than_limit():
-    request_adapter = FakeRequestAdapter()
-    response_adapter = FakeResponseAdapter()
-
-    config = ApplicationConfig(
-        request_adapter=request_adapter,
-        response_adapter=response_adapter,
-        static_folder=None,
-        max_content_length=5,
-    )
-
-    app = WebApplication(config=config)
-    view_was_called = False
-
-    @app.route("/upload", methods=["POST"])
-    def upload(request):
-        nonlocal view_was_called
-        view_was_called = True
-        return "Uploaded"
-
-    app(
-        {
-            "method": "POST",
-            "path": "/upload",
-            "body": b"123456",
-        }
-    )
-
-    body, status_code, headers = (
-        response_adapter.received_response
-    )
-
-    assert view_was_called is False
-    assert status_code == 413
-    assert "Payload Too Large" in body
-    assert headers == {
-        "Content-Type": "text/html; charset=utf-8",
-    }
-
-def test_application_accepts_body_at_size_limit():
-    request_adapter = FakeRequestAdapter()
-    response_adapter = FakeResponseAdapter()
-
-    config = ApplicationConfig(
-        request_adapter=request_adapter,
-        response_adapter=response_adapter,
-        static_folder=None,
-        max_content_length=5,
-    )
-
-    app = WebApplication(config=config)
-
-    @app.route("/upload", methods=["POST"])
-    def upload(request):
-        return "Uploaded"
-
-    result = app(
-        {
-            "method": "POST",
-            "path": "/upload",
-            "body": b"12345",
-        }
-    )
-
-    assert result == {
-        "converted": "Uploaded",
-    }

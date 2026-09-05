@@ -25,6 +25,7 @@ def test_application_integrates_with_basic_web_server():
 
     server_result = app(server_request)
 
+    server_result = (server_result[0].decode("utf-8"), server_result[1], server_result[2])
 
     assert server_result == (
         "<h1>User Details for User ID: 42</h1>",

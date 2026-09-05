@@ -1,6 +1,7 @@
 import json
 import mimetypes
 from pathlib import Path
+from http.cookies import SimpleCookie
 
 MIME_TYPES = {
     #Web
@@ -93,17 +94,20 @@ def content_response(body, content_type, status_code=200, headers=None):
     response_headers = _prepare_headers(content_type, headers)
     return body, status_code, response_headers
 
-def html_response(body, status_code=200, headers=None):
-    return content_response(body=body, content_type="text/html; charset=utf-8",
+def html_response(body, status_code=200, headers=None, charset="utf-8"):
+    encoded_body = body.encode(charset)
+    return content_response(body=encoded_body, content_type=f"text/html; charset={charset}",
         status_code=status_code, headers=headers)
 
-def text_response(body, status_code=200, headers=None):
-    return content_response(body=body, content_type="text/plain; charset=utf-8",
+def text_response(body, status_code=200, headers=None, charset="utf-8"):
+    encoded_body = body.encode(charset)
+    return content_response(body=encoded_body, content_type=f"text/plain; charset={charset}",
         status_code=status_code, headers=headers)
 
-def json_response(data, status_code=200, headers=None):
+def json_response(data, status_code=200, headers=None, charset="utf-8"):
     body = json.dumps(data, ensure_ascii=False)
-    return content_response(body=body, content_type="application/json; charset=utf-8",
+    encoded_body = body.encode(charset)
+    return content_response(body=encoded_body, content_type=f"application/json; charset={charset}",
         status_code=status_code, headers=headers)
 
 def file_response(file_path, status_code=200, headers=None, as_attachment=False, download_name=None):
@@ -132,4 +136,89 @@ def redirect_response(location, status_code=302, headers=None):
 def empty_response(status_code=204, headers=None):
     response_headers = _prepare_headers(headers=headers)
     return b"", status_code, response_headers
+
+def set_cookie(
+        response,
+        key,
+        value,
+        max_age=None,
+        expires=None,
+        path="/",
+        domain=None,
+        secure=False,
+        http_only=False,
+        same_site=None
+):
+
+    body, status_code, headers = response
+
+    if headers is None:
+        response_headers = []
+    elif isinstance(headers, dict):
+        response_headers = list(headers.items())
+    else:
+        response_headers = list(headers)
+
+    cookie = SimpleCookie()
+    cookie[key] = value
+
+    morsel = cookie[key]
+    if max_age is not None:
+        morsel["max-age"] = str(max_age)
+    if expires is not None:
+        morsel["expires"] = expires
+    if path is not None:
+        morsel["path"] = path
+    if domain is not None:
+        morsel["domain"] = domain
+    if secure:
+        morsel["secure"] = True
+    if http_only:
+        morsel["httpOnly"] = True
+    if same_site is not None:
+        morsel["samesite"] = same_site
+
+    response_headers.append(("Set-Cookie", morsel.OutputString()))
+
+    return body, status_code, response_headers
+
+def delete_cookie(response, key, path="/", domain=None):
+    return set_cookie(
+        response=response,
+        key=key,
+        value="",
+        max_age=0,
+        expires="Thu, 01 Jan 1970 00:00:00 GMT",
+        path=path,
+        domain=domain
+    )
+        
+def test_delete_cookie_expires_cookie():
+    response = text_response("Logged out")
+
+    body, status_code, headers = (
+        delete_cookie(
+            response=response,
+            key="session_id",
+            path="/",
+        )
+    )
+
+    cookie_header = next(
+        value
+        for name, value in headers
+        if name.lower() == "set-cookie"
+    )
+
+    cookie = SimpleCookie()
+    cookie.load(cookie_header)
+
+    morsel = cookie["session_id"]
+
+    assert morsel.value == ""
+    assert morsel["max-age"] == "0"
+    assert morsel["expires"] == (
+        "Thu, 01 Jan 1970 00:00:00 GMT"
+    )
+    assert morsel["path"] == "/"
 

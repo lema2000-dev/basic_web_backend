@@ -138,3 +138,29 @@ def test_lema_response_adapter_does_not_modify_original_headers():
         "Content-Type": "text/plain",
         "Content-Length": "999",
     }
+
+def test_response_adapter_preserves_repeated_cookies():
+    adapter = LemaResponseAdapter()
+
+    response = (
+        b"Hello",
+        200,
+        [
+            ("Content-Type", "text/plain"),
+            ("Set-Cookie", "session_id=abc123"),
+            ("Content-Length", "5"),
+            ("Set-Cookie", "theme=dark"),
+        ],
+    )
+
+    result = adapter.convert(response)
+
+    assert result == (
+        b"Hello",
+        200,
+        [
+            ("Content-Type", "text/plain"),
+            ("Set-Cookie", "session_id=abc123"),
+            ("Set-Cookie", "theme=dark"),
+        ],
+    )
