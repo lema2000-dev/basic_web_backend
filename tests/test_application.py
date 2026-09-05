@@ -530,3 +530,73 @@ def test_static_route_only_accepts_get_method(
     assert status_code == 405
     assert "Method Not Allowed" in body
     assert headers["Allow"] == "GET"
+
+def test_application_rejects_body_larger_than_limit():
+    request_adapter = FakeRequestAdapter()
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=request_adapter,
+        response_adapter=response_adapter,
+        static_folder=None,
+        max_content_length=5,
+    )
+
+    app = WebApplication(config=config)
+    view_was_called = False
+
+    @app.route("/upload", methods=["POST"])
+    def upload(request):
+        nonlocal view_was_called
+        view_was_called = True
+        return "Uploaded"
+
+    app(
+        {
+            "method": "POST",
+            "path": "/upload",
+            "body": b"123456",
+        }
+    )
+
+    body, status_code, headers = (
+        response_adapter.received_response
+    )
+
+    body = body.decode("utf-8")
+
+    assert view_was_called is False
+    assert status_code == 413
+    assert "Payload Too Large" in body
+    assert headers == {
+        "Content-Type": "text/html; charset=utf-8",
+    }
+
+def test_application_accepts_body_at_size_limit():
+    request_adapter = FakeRequestAdapter()
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=request_adapter,
+        response_adapter=response_adapter,
+        static_folder=None,
+        max_content_length=5,
+    )
+
+    app = WebApplication(config=config)
+
+    @app.route("/upload", methods=["POST"])
+    def upload(request):
+        return "Uploaded"
+
+    result = app(
+        {
+            "method": "POST",
+            "path": "/upload",
+            "body": b"12345",
+        }
+    )
+
+    assert result == {
+        "converted": "Uploaded",
+    }
