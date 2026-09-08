@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+    <title>{{ title }}</title>
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
+</head>
+<body>
+    <main class="container">
+        <h1>{{ user.name }}</h1>
+
+        {% if user.active %}
+        <p class="active">
+            This user is active.
+        </p>
+
+        <h2>Roles</h2>
+
+        <ul class="role-list">
+            {% for role in user.roles %}
+            <li>{{ role }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="inactive">
+            This user is not active.
+        </p>
+        {% endif %}
+
+        <a class="back-link" href="/">
+            Back to the user list
+        </a>
+    </main>
+</body>
+</html>

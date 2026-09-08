@@ -82,3 +82,30 @@ def test_application_config_accepts_maximum_content_length():
     )
 
     assert config.max_content_length == 1024
+
+def test_config_stores_template_settings(tmp_path):
+    template_folder = tmp_path / "templates"
+
+    config = ApplicationConfig(
+        template_folder=template_folder,
+        template_encoding="utf-16",
+        template_autoescape=False,
+        template_cache=False,
+        template_auto_reload=True
+    )
+
+    assert config.template_folder == template_folder
+    assert config.template_encoding == "utf-16"
+    assert config.template_autoescape is False
+    assert config.template_cache is False
+    assert config.template_auto_reload is True
+
+def test_config_has_default_template_settings():
+    config = ApplicationConfig()
+
+    assert config.template_folder == "templates"
+    assert config.template_encoding == "utf-8"
+    assert config.template_autoescape is True
+    assert config.template_cache is True
+    assert config.template_auto_reload is False
+    

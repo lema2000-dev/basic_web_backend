@@ -15,6 +15,7 @@ from basic_web_backend.exceptions import (
     UnsupportedMediaType,
 )
 import basic_web_backend.response as ResponseModule
+from basic_web_backend.template.environment import TemplateEnvironment
 
 class FakeRequestAdapter:
     def __init__(self):
@@ -600,3 +601,70 @@ def test_application_accepts_body_at_size_limit():
     assert result == {
         "converted": "Uploaded",
     }
+
+def test_application_creates_template_environment(tmp_path):
+    template_folder = tmp_path / "templates"
+
+    config = ApplicationConfig(
+        template_folder=template_folder,
+        template_encoding="utf-16",
+        template_autoescape=False,
+        template_cache=False,
+        template_auto_reload=True,
+    )
+
+    app = WebApplication(config=config)
+
+    enviroment = app.template_environment
+
+    assert isinstance(enviroment, TemplateEnvironment)
+    assert enviroment.template_folder == template_folder
+    assert enviroment.encoding == "utf-16"
+    assert enviroment.autoescape is False
+    assert enviroment.cache_enabled is False
+    assert enviroment.auto_reload is True
+
+def test_application_renders_template(tmp_path):
+    template_folder = tmp_path / "templates"
+    template_folder.mkdir()
+    template_file = template_folder / "profile.html"
+    template_file.write_text("<h1>Hello, {{ username }}!</h1>", encoding="utf-8")
+
+    config = ApplicationConfig(
+        template_folder=template_folder,
+    )
+
+    app = WebApplication(config=config)
+
+    body, status_code, headers = app.render_template("profile.html", username="Martin")
+
+    assert body.decode("utf-8") == "<h1>Hello, Martin!</h1>"
+    assert status_code == 200
+    assert headers == {
+        "Content-Type": "text/html; charset=utf-8"
+    }
+
+    def test_application_template_response_accepts_options(tmp_path):
+        template_folder = tmp_path / "templates"
+        template_folder.mkdir()
+        template_file = template_folder / "created.html"
+        template_file.write_text("<h1>{{ message }}</h1>", encoding="utf-8")
+
+        app = WebApplication(config=ApplicationConfig(template_folder=template_folder))
+
+        body, status_code, headers = app.render_template(
+            "created.html",
+            message="Created",
+            status_code=201,
+            headers={"Location": "/items/1"},
+            charset="utf-16"
+        )
+
+        assert body.decode("utf-16") == "<h1>Created</h1>"
+        assert status_code == 201
+        assert headers == {
+            "Location": "/items/1",
+            "Content-Type": "text/html; charset=utf-16"
+        }
+
+        

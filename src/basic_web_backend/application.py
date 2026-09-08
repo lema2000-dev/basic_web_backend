@@ -6,6 +6,7 @@ from .exceptions import BadRequest, HTTPException, PayloadTooLarge
 from .response import html_response
 from .routing import Router
 from .static import StaticFileHandler
+from .template.environment import TemplateEnvironment
 
 
 class WebApplication:
@@ -14,6 +15,14 @@ class WebApplication:
             config = ApplicationConfig()
 
         self.config = config
+        self.template_environment = TemplateEnvironment(
+            template_folder=self.config.template_folder,
+            encoding=self.config.template_encoding,
+            autoescape=self.config.template_autoescape,
+            cache_enabled=self.config.template_cache,
+            auto_reload=self.config.template_auto_reload
+        )
+
         self.router = Router()
         self.error_handlers = {}
         self.static_handler = None
@@ -128,3 +137,14 @@ class WebApplication:
 
         if body_length > limit:
             raise PayloadTooLarge(f"The request body exceeds the {limit}-byte limit.")
+
+    def render_template(self, template_name, status_code=200, headers=None, charset="utf-8", **context):
+        rendered_html = self.template_environment.render(template_name, **context)
+
+        return html_response(
+            body=rendered_html,
+            status_code=status_code,
+            headers=headers,
+            charset=charset
+        )
+    

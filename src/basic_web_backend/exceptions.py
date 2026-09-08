@@ -118,4 +118,50 @@ class UnsupportedMediaType(HTTPException):
 class UnprocessableContent(HTTPException):
     status_code = 422
     default_message = "Unprocessable Content"
-        
+
+class TemplateError(Exception):
+    """Base class for template-releated errors:"""
+
+class TemplateNotFound(TemplateError):
+    def __init__(self, template_name):
+        self.template_name = template_name
+
+        super().__init__(f"Template not found: {template_name}")
+
+class TemplateSyntaxError(TemplateError):
+    def __init__(self, message, template_name=None, line=None, column=None):
+        self.message = message
+        self.template_name = template_name
+        self.line = line
+        self.column = column
+
+        formatted_message = self._format_message()
+        super().__init__(formatted_message)
+
+    def _format_message(self):
+        if (self.template_name is not None and self.line is not None and self.column is not None):
+            return (
+                f"{self.template_name}:{self.line}:{self.column}: {self.message}"
+            )
+
+        if self.template_name is not None and self.line is not None:
+            return f"{self.template_name}:{self.line}: {self.message}"
+
+        if self.template_name is not None:
+            return f"{self.template_name}: {self.message}"
+
+        if self.line is not None and self.column is not None:
+            return f"Line {self.line}, Column {self.column}: {self.message}"
+
+        if self.line is not None:
+            return f"Line {self.line}: {self.message}"
+
+        return self.message
+
+class TemplateRenderError(TemplateError):
+    """Raised when a template cannot be rendered."""
+
+class UndefinedVariableError(TemplateRenderError):
+    def __init__(self, variable_name):
+        self.variable_name = variable_name
+        super().__init__(f"Undefined variable: {variable_name}")

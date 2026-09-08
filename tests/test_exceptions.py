@@ -13,7 +13,12 @@ from basic_web_backend.exceptions import (
     PayloadTooLarge,
     Unauthorized,
     UnprocessableContent,
-    UnsupportedMediaType
+    UnsupportedMediaType,
+    TemplateError,
+    TemplateNotFound,
+    TemplateSyntaxError,
+    TemplateRenderError,
+    UndefinedVariableError
 )
 
 def test_routing_error_is_backend_error():
@@ -118,3 +123,52 @@ def test_http_exception_accepts_custom_message_and_headers():
     assert error.headers == {
         "WWW-Authenticate": "Basic",
     }
+
+def test_template_not_found_is_template_error():
+    error = TemplateNotFound(template_name="missing_template.html")
+
+    assert isinstance(error, TemplateError)
+    assert error.template_name == "missing_template.html"
+    assert str(error) == "Template not found: missing_template.html"
+
+def test_template_syntax_error_stores_position():
+    error = TemplateSyntaxError(
+        message="Missing endif statement.",
+        template_name="template.html",
+        line=8,
+        column=5
+    )
+
+    assert isinstance(error, TemplateError)
+    assert error.message == "Missing endif statement."
+    assert error.template_name == "template.html"
+    assert error.line == 8
+    assert error.column == 5
+
+def test_template_syntax_error_formats_position():
+    error = TemplateSyntaxError(
+        message="Unexpected endif statement.",
+        template_name="template.html",
+        line=4,
+        column=3
+    )
+
+    assert str(error) == "template.html:4:3: Unexpected endif statement."
+
+def test_template_render_error_is_render_error():
+    error = UndefinedVariableError(variable_name="user.name")
+
+    assert isinstance(error, TemplateRenderError)
+    assert error.variable_name == "user.name"
+    assert str(error) == "Undefined variable: user.name"
+
+def test_template_syntax_error_without_position():
+    error = TemplateSyntaxError(
+        message="Invalid syntax error.",
+    )
+
+    assert error.template_name is None
+    assert error.line is None
+    assert error.column is None
+    assert str(error) == "Invalid syntax error."
+    
