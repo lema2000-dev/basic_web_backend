@@ -128,6 +128,15 @@ class TemplateNotFound(TemplateError):
 
         super().__init__(f"Template not found: {template_name}")
 
+class TemplateLoadError(TemplateError):
+    """Raised when a template file cannot be loaded."""
+
+    def __init__(self, template_name, message):
+        self.template_name = template_name
+        self.message = message
+
+        super().__init__(f"Could not load template {template_name!r}: {message}")
+
 class TemplateSyntaxError(TemplateError):
     def __init__(self, message, template_name=None, line=None, column=None):
         self.message = message

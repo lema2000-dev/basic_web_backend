@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..exceptions import TemplateNotFound
+from ..exceptions import TemplateNotFound, TemplateLoadError
 from .evaluator import render as render_nodes
 from .lexer import tokenize
 from .parser import parse
@@ -75,24 +75,34 @@ class TemplateEnvironment:
             if not self.auto_reload:
                 return cached_template.nodes
 
-            if not self._template_changed(template_path=template_path, cached_template=cached_template):
+            if not self._template_changed(template_name, template_path=template_path, cached_template=cached_template):
                 return cached_template.nodes
 
         nodes = self._load_template_nodes(template_name=template_name, template_path=template_path)
 
-        file_status = template_path.stat()
+        file_status = self._get_file_status(template_name=template_name, template_path=template_path)
         self._template_cache[template_path] = CachedTemplate(nodes=nodes, modified_time_ns=file_status.st_mtime_ns, file_size=file_status.st_size)
 
         return nodes
 
     def _load_template_nodes(self, template_name, template_path):
-        source = template_path.read_text(encoding=self.encoding)
+        try:
+            source = template_path.read_text(encoding=self.encoding)
+        except (OSError, UnicodeError) as error:
+            raise TemplateLoadError(template_name=template_name, message=str(error)) from error
+
         tokens = tokenize(source, template_name=template_name)
         nodes = parse(tokens, template_name=template_name)
         return nodes
 
-    def _template_changed(self, template_path, cached_template):
-        file_status = template_path.stat()
+    def _get_file_status(self, template_name, template_path):
+        try:
+            return template_path.stat()
+        except OSError as error:
+            raise TemplateLoadError(template_name=template_name, message=str(error)) from error
+
+    def _template_changed(self, template_name, template_path, cached_template):
+        file_status = self._get_file_status(template_name=template_name, template_path=template_path)
         return (
             file_status.st_mtime_ns != cached_template.modified_time_ns or
             file_status.st_size != cached_template.file_size

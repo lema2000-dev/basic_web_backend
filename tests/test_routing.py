@@ -360,3 +360,53 @@ def test_ambiguous_route_is_not_registered():
     assert route_match.parameters == {
         "name": "42",
     }
+
+def test_add_route_rejects_duplicate_path_without_leading_slash():
+    router = Router()
+
+    with pytest.raises(InvalidRouteError):
+        router.add_route(
+            path="users",
+            view=example_view,
+            methods=["GET"],
+        )
+
+def test_add_route_rejects_unkown_converter():
+    router = Router()
+
+    with pytest.raises(InvalidRouteError):
+        router.add_route(
+            path="/users/<str:username>",
+            view=example_view,
+            methods=["GET"],
+        )
+
+def test_add_route_rejects_methods_as_string():
+    router = Router()
+
+    with pytest.raises(InvalidRouteError):
+        router.add_route(
+            path="/users",
+            view=example_view,
+            methods="GET",
+        )
+
+def test_add_route_rejects_empty_methods():
+    router = Router()
+
+    with pytest.raises(InvalidRouteError):
+        router.add_route(
+            path="/users",
+            view=example_view,
+            methods=[],
+        )
+
+def test_add_route_rejects_non_callable_view():
+    router = Router()
+
+    with pytest.raises(InvalidRouteError):
+        router.add_route(
+            path="/users",
+            view="not callable",
+            methods=["GET"],
+        )

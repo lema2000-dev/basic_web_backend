@@ -2,8 +2,10 @@ from html import escape
 from traceback import format_exc
 
 from .config import ApplicationConfig
+from .logging_config import create_logger
 from .exceptions import BadRequest, HTTPException, PayloadTooLarge
 from .response import html_response
+from .request import Request
 from .routing import Router
 from .static import StaticFileHandler
 from .template.environment import TemplateEnvironment
@@ -15,6 +17,15 @@ class WebApplication:
             config = ApplicationConfig()
 
         self.config = config
+
+        self.logger = create_logger(
+            name=self.config.logger_name,
+            log_file=self.config.log_file,
+            log_level=self.config.log_level,
+            log_max_bytes=self.config.log_max_bytes,
+            log_backup_count=self.config.log_backup_count
+        )
+
         self.template_environment = TemplateEnvironment(
             template_folder=self.config.template_folder,
             encoding=self.config.template_encoding,
@@ -51,17 +62,29 @@ class WebApplication:
         return decorator
 
     def errorhandler(self, status_code):
+        if  not isinstance(status_code, int) or isinstance(status_code, bool):
+            raise TypeError("The error handler status code must be an integer.")
+
+        if not (400 <= status_code <= 599):
+            raise ValueError("The error handler status code must be between 400 and 599.")
+
         def decorator(handler):
+            if not callable(handler):
+                raise TypeError("The error handler must be a callable.")
+
+            if status_code in self.error_handlers:
+                raise ValueError(f"An error handler is already registered for status code {status_code}.")
+
             self.error_handlers[status_code] = handler
             return handler
+        
         return decorator
 
     def __call__(self, server_request):
+        request = None
 
         try:
-            request = self.config.request_adapter.convert(
-                server_request
-            )
+            request = self._convert_request(server_request)
 
             self._check_content_length(request)
 
@@ -70,19 +93,46 @@ class WebApplication:
             response = route_match.view(request=request, **route_match.parameters)
 
         except HTTPException as error:
-            response = self._handle_http_exception(error)
+            response = self._handle_http_exception(error, request=request)
 
 
         except Exception as error:
-            response = self._handle_internal_error(error)
+            response = self._handle_internal_error(error, request=request)
 
-        return self.config.response_adapter.convert(response)
+        return self._convert_response(response=response, request=request)
 
-    def _handle_http_exception(self, error):
+    def _convert_request(self, server_request):
+        request = self.config.request_adapter.convert(server_request)
+
+        if not isinstance(request, Request):
+            raise TypeError(
+                "The request adapter must return a Request object."
+            )
+
+        return request
+
+    def _convert_response(self, response, request=None):
+        try:
+            return self.config.response_adapter.convert(response)
+        except Exception:
+            if request is None:
+                self.logger.exception("The response adapter failed.")
+            else:
+                self.logger.exception(
+                    "The response adapter failed while processing a request: %s %s",
+                    request.method,
+                    request.path
+                )
+            raise
+
+    def _handle_http_exception(self, error, request=None):
         handler = self.error_handlers.get(error.status_code)
 
         if handler is not None:
-            return handler(error)
+            try:
+                return handler(error)
+            except Exception as handler_error:
+                return self._handle_internal_error(handler_error, request=request)
 
         title = f"{error.status_code} {error.default_message}"
 
@@ -97,12 +147,29 @@ class WebApplication:
             headers=error.headers
         )
 
-    def _handle_internal_error(self, error):
+    def _handle_internal_error(self, error, request=None):
+        if request is None:
+            self.logger.exception("Unhandled exception while adapting a server request.")
+        else:
+            self.logger.exception(
+                "Unhandled exception while processing a request: %s %s",
+                request.method,
+                request.path
+            )
+
         handler = self.error_handlers.get(500)
 
         if handler is not None:
-            return handler(error)
+            try:
+                return handler(error)
+            except Exception as handler_error:
+                self.logger.exception("The custom 500 error handler failed.")
 
+                return self._create_internal_error_response(handler_error)
+
+        return self._create_internal_error_response(error)
+
+    def _create_internal_error_response(self, error):
         if self.config.debug:
             error_type = type(error).__name__
             error_message = escape(str(error))
@@ -147,4 +214,4 @@ class WebApplication:
             headers=headers,
             charset=charset
         )
-    
+

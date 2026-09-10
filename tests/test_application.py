@@ -667,4 +667,646 @@ def test_application_renders_template(tmp_path):
             "Content-Type": "text/html; charset=utf-16"
         }
 
-        
+@pytest.mark.parametrize(
+    "status_code", [
+        "500",
+        None,
+        True,
+    ],
+)
+def test_errorhandler_rejects_non_integer_status_code(
+    status_code,
+):
+    app, _, _ = create_application()
+
+    with pytest.raises(TypeError):
+        app.errorhandler(status_code)
+
+@pytest.mark.parametrize(
+    "status_code", [
+        399,
+        600,
+    ],
+)
+def test_errorhandler_rejects_non_error_status_code(
+    status_code,
+):
+    app, _, _ = create_application()
+
+    with pytest.raises(ValueError):
+        app.errorhandler(status_code)
+
+def test_errorhandler_rejects_non_callable_handler():
+    app, _, _ = create_application()
+
+    decorator = app.errorhandler(500)
+
+    with pytest.raises(TypeError):
+        decorator("not callable")
+
+def test_errorhandler_rejects_duplicate_handler():
+    app, _, _ = create_application()
+
+    @app.errorhandler(500)
+    def first_handler(error):
+        return "First handler"
+
+    with pytest.raises(ValueError):
+        @app.errorhandler(500)
+        def second_handler(error):
+            return "Second handler"
+
+def test_duplicate_errorhandler_preserves_original():
+    app, _, _ = create_application()
+
+    def first_handler(error):
+        return "First handler"
+
+    app.errorhandler(500)(first_handler)
+
+    with pytest.raises(ValueError):
+        app.errorhandler(500)(lambda error: "Second handler")
+
+    assert app.error_handlers[500] is first_handler
+
+def test_application_handles_error_handler_failure():
+    app, _, response_adapter = create_application()
+
+    @app.errorhandler(404)
+    def broken_not_found_handler(error):
+        raise RuntimeError("The 404 handler failed")
+
+    app({"method": "GET", "path": "/missing"})
+
+    body, status_code, headers = response_adapter.received_response
+
+    assert status_code == 500
+    assert body.decode("utf-8") == "<h1>500 Internal Server Error</h1>"
+
+def test_custom_500_handler_handles_http_failure():
+    app, _, response_adapter = create_application()
+
+    recieved_errors = []
+
+    @app.errorhandler(404)
+    def broken_not_found_handler(error):
+        raise RuntimeError("The 404 handler failed")
+
+    @app.errorhandler(500)
+    def internal_error_handler(error):
+        recieved_errors.append(error)
+
+        return ResponseModule.text_response("Custom internal error", status_code=500)
+
+    app({"method": "GET", "path": "/missing"})
+
+    assert len(recieved_errors) == 1
+    assert isinstance(recieved_errors[0], RuntimeError)
+    assert str(recieved_errors[0]) == "The 404 handler failed"
+
+    body, status_code, _ = response_adapter.received_response
+
+    assert status_code == 500
+    assert body.decode("utf-8") == "Custom internal error"
+
+def test_application_falls_back_when_500_handler_fails():
+    app, _, response_adapter = create_application()
+
+    @app.route("/")
+    def index(request):
+        raise RuntimeError("The view failed")
+
+    @app.errorhandler(500)
+    def broken_500_handler(error):
+        raise RuntimeError("The 500 handler failed")
+
+    app({"method": "GET", "path": "/"})
+
+    body, status_code, headers = response_adapter.received_response
+
+    assert status_code == 500
+    assert body.decode("utf-8") == "<h1>500 Internal Server Error</h1>"
+
+    assert headers == {
+        "Content-Type": "text/html; charset=utf-8"
+    }
+
+def test_application_logs_unhandled_exceptions(tmp_path):
+    log_file = tmp_path / "backend.log"
+
+    config = ApplicationConfig(
+        request_adapter=FakeRequestAdapter(),
+        response_adapter=FakeResponseAdapter(),
+        logger_name="test.application.unhandled",
+        log_file=log_file,
+        log_level="ERROR",
+    )
+
+    app = WebApplication(config=config)
+
+    @app.route("/")
+    def index(request):
+        raise RuntimeError("Database unavailable")
+
+    app({"method": "GET", "path": "/"})
+
+    for handler in app.logger.handlers:
+        handler.flush()
+
+    log_content = log_file.read_text(encoding="utf-8")
+
+    assert "ERROR" in log_content
+    assert "Database unavailable" in log_content
+    assert "Traceback" in log_content
+    assert "GET /" in log_content
+
+def test_application_logs_request_adapter_failure(tmp_path):
+    class BrokenRequestAdapter:
+        def convert(self, server_request):
+            raise RuntimeError("Request conversion failed")
+
+    log_file = tmp_path / "backend.log"
+
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=BrokenRequestAdapter(),
+        response_adapter=response_adapter,
+        logger_name="test.application.request_adapter",
+        log_file=log_file,
+        log_level="ERROR",
+    )
+
+    app = WebApplication(config=config)
+
+    result = app({"method": "GET", "path": "/"})
+
+    for handler in app.logger.handlers:
+        handler.flush()
+
+    log_content = log_file.read_text(encoding="utf-8")
+
+    assert "Request conversion failed" in log_content
+    assert "Traceback" in log_content
+
+    body, status_code, headers = response_adapter.received_response
+
+    assert status_code == 500
+    assert result == {"converted": (body, status_code, headers)}
+
+def test_application_logs_and_reraises_response_adapter_failure(tmp_path):
+    adapter_error = RuntimeError("Response conversion failed")
+
+    class BrokenResponseAdapter:
+        def convert(self, response):
+            raise adapter_error
+
+    log_file = tmp_path / "backend.log"
+
+    config = ApplicationConfig(
+        request_adapter=FakeRequestAdapter(),
+        response_adapter=BrokenResponseAdapter(),
+        logger_name="test.application.response_adapter",
+        log_file=log_file,
+        log_level="ERROR",
+    )
+
+    app = WebApplication(config=config)
+
+    @app.route("/")
+    def index(request):
+        return ResponseModule.text_response("Hello")
+
+    with pytest.raises(RuntimeError, match="Response conversion failed") as error_info:
+        app({"method": "GET", "path": "/"})
+
+    assert error_info.value is adapter_error
+
+    for handler in app.logger.handlers:
+        handler.flush()
+
+    log_content = log_file.read_text(encoding="utf-8")
+
+    assert "The response adapter failed" in log_content
+    assert "Response conversion failed" in log_content
+    assert "Traceback" in log_content
+
+@pytest.mark.parametrize(
+    "setting_name",
+    [
+        "debug",
+        "template_autoescape",
+        "template_cache",
+        "template_auto_reload",
+    ],
+)
+def test_config_rejects_non_boolean_settings(
+    setting_name,
+):
+    with pytest.raises(TypeError):
+        ApplicationConfig(
+            **{setting_name: "yes"}
+        )
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        -1,
+        1.5,
+        "1024",
+        True,
+    ],
+)
+def test_config_rejects_invalid_max_content_length(
+    value,
+):
+    with pytest.raises(
+        (TypeError, ValueError)
+    ):
+        ApplicationConfig(
+            max_content_length=value
+        )
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        0,
+        1024,
+    ],
+)
+def test_config_accepts_valid_max_content_length(
+    value,
+):
+    config = ApplicationConfig(
+        max_content_length=value
+    )
+
+    assert config.max_content_length == value
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "static",
+        42,
+    ],
+)
+def test_config_rejects_invalid_static_url_path(
+    value,
+):
+    with pytest.raises(
+        (TypeError, ValueError)
+    ):
+        ApplicationConfig(
+            static_url_path=value
+        )
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "/",
+        "/static",
+        "/assets",
+    ],
+)
+def test_config_accepts_valid_static_url_path(
+    value,
+):
+    config = ApplicationConfig(
+        static_url_path=value
+    )
+
+    assert config.static_url_path == value
+
+def test_config_rejects_unknown_template_encoding():
+    with pytest.raises(ValueError):
+        ApplicationConfig(
+            template_encoding=(
+                "unknown-example-encoding"
+            )
+        )
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        "utf-8",
+        "utf-16",
+        "latin-1",
+    ],
+)
+def test_config_accepts_known_template_encoding(
+    encoding,
+):
+    config = ApplicationConfig(
+        template_encoding=encoding
+    )
+
+    assert config.template_encoding == encoding
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "   ",
+        42,
+    ],
+)
+def test_config_rejects_invalid_logger_name(
+    value,
+):
+    with pytest.raises(
+        (TypeError, ValueError)
+    ):
+        ApplicationConfig(
+            logger_name=value
+        )
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "UNKNOWN",
+        "",
+        None,
+        42,
+    ],
+)
+def test_config_rejects_invalid_log_level(
+    value,
+):
+    with pytest.raises(
+        (TypeError, ValueError)
+    ):
+        ApplicationConfig(
+            log_level=value
+        )
+
+@pytest.mark.parametrize(
+    ("setting_name", "value"),
+    [
+        ("log_max_bytes", -1),
+        ("log_max_bytes", 1.5),
+        ("log_max_bytes", True),
+        ("log_backup_count", -1),
+        ("log_backup_count", 1.5),
+        ("log_backup_count", True),
+    ],
+)
+def test_config_rejects_invalid_log_rotation_setting(
+    setting_name,
+    value,
+):
+    with pytest.raises(
+        (TypeError, ValueError)
+    ):
+        ApplicationConfig(
+            **{setting_name: value}
+        )
+
+def test_config_accepts_disabled_log_rotation():
+    config = ApplicationConfig(
+        log_max_bytes=0,
+        log_backup_count=0,
+    )
+
+    assert config.log_max_bytes == 0
+    assert config.log_backup_count == 0
+
+@pytest.mark.parametrize(
+    "invalid_result",
+    [
+        None,
+        object(),
+        {
+            "method": "GET",
+            "path": "/",
+        },
+    ],
+)
+def test_application_rejects_invalid_request_adapter_result(
+    invalid_result,
+):
+    class InvalidRequestAdapter:
+        def convert(self, server_request):
+            return invalid_result
+
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=InvalidRequestAdapter(),
+        response_adapter=response_adapter,
+    )
+
+    app = WebApplication(config=config)
+
+    app(
+        {
+            "method": "GET",
+            "path": "/",
+        }
+    )
+
+    body, status_code, headers = (
+        response_adapter.received_response
+    )
+
+    assert status_code == 500
+    assert (
+        body.decode("utf-8")
+        == "<h1>500 Internal Server Error</h1>"
+    )
+
+def test_invalid_request_adapter_result_reaches_500_handler():
+    class InvalidRequestAdapter:
+        def convert(self, server_request):
+            return None
+
+    received_errors = []
+
+    config = ApplicationConfig(
+        request_adapter=InvalidRequestAdapter(),
+        response_adapter=FakeResponseAdapter(),
+    )
+
+    app = WebApplication(config=config)
+
+    @app.errorhandler(500)
+    def internal_error_handler(error):
+        received_errors.append(error)
+
+        return ResponseModule.text_response(
+            "Internal error",
+            status_code=500,
+        )
+
+    app(
+        {
+            "method": "GET",
+            "path": "/",
+        }
+    )
+
+    assert len(received_errors) == 1
+    assert isinstance(
+        received_errors[0],
+        TypeError,
+    )
+    assert str(received_errors[0]) == (
+        "The request adapter must return "
+        "a Request object."
+    )
+
+def test_application_accepts_request_subclass_from_adapter():
+    class CustomRequest(Request):
+        pass
+
+    class CustomRequestAdapter:
+        def convert(self, server_request):
+            return CustomRequest(
+                method="GET",
+                path="/",
+            )
+
+    config = ApplicationConfig(
+        request_adapter=CustomRequestAdapter(),
+        response_adapter=FakeResponseAdapter(),
+    )
+
+    app = WebApplication(config=config)
+
+    @app.route("/")
+    def index(request):
+        return ResponseModule.text_response(
+            "Accepted"
+        )
+
+    result = app(object())
+
+    body, status_code, _ = (
+        result["converted"]
+    )
+
+    assert body.decode("utf-8") == "Accepted"
+    assert status_code == 200
+
+@pytest.mark.parametrize(
+    "invalid_result",
+    [
+        None,
+        object(),
+        {
+            "method": "GET",
+            "path": "/",
+        },
+    ],
+)
+def test_application_rejects_invalid_request_adapter_result(
+    invalid_result,
+):
+    class InvalidRequestAdapter:
+        def convert(self, server_request):
+            return invalid_result
+
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=InvalidRequestAdapter(),
+        response_adapter=response_adapter,
+    )
+
+    app = WebApplication(config=config)
+
+    app(
+        {
+            "method": "GET",
+            "path": "/",
+        }
+    )
+
+    body, status_code, headers = (
+        response_adapter.received_response
+    )
+
+    assert status_code == 500
+    assert (
+        body.decode("utf-8")
+        == "<h1>500 Internal Server Error</h1>"
+    )
+
+def test_application_logs_static_file_permission_error(
+    tmp_path,
+    monkeypatch,
+):
+    static_folder = tmp_path / "static"
+    static_folder.mkdir()
+
+    log_file = tmp_path / "backend.log"
+
+    response_adapter = FakeResponseAdapter()
+
+    config = ApplicationConfig(
+        request_adapter=FakeRequestAdapter(),
+        response_adapter=response_adapter,
+        static_folder=static_folder,
+        logger_name=(
+            "test.application.static_permission"
+        ),
+        log_file=log_file,
+        log_level="ERROR",
+    )
+
+    app = WebApplication(config=config)
+
+    def raise_permission_error(**kwargs):
+        raise PermissionError(
+            "Static file access denied"
+        )
+
+    monkeypatch.setattr(
+        app.static_handler,
+        "serve",
+        raise_permission_error,
+    )
+
+    result = app(
+        {
+            "method": "GET",
+            "path": "/static/style.css",
+        }
+    )
+
+    for handler in app.logger.handlers:
+        handler.flush()
+
+    log_content = log_file.read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "Static file access denied"
+        in log_content
+    )
+    assert (
+        "GET /static/style.css"
+        in log_content
+    )
+    assert "Traceback" in log_content
+
+    body, status_code, headers = (
+        response_adapter.received_response
+    )
+
+    assert status_code == 500
+    assert (
+        body.decode("utf-8")
+        == "<h1>500 Internal Server Error</h1>"
+    )
+    assert result == {
+        "converted": (
+            body,
+            status_code,
+            headers,
+        )
+    }

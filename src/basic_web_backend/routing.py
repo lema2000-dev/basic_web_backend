@@ -46,19 +46,80 @@ class Router:
         self.dynamic_routes = []
 
     def add_route(self, path, view, methods=None):
-        methods = self._prepare_methods(methods)
+        self._validate_path(path=path)
+        self._validate_view(path=path, view=view)
 
-        if PARAMETER_PATTERN.search(path):
+        methods = self._prepare_methods(path=path, methods=methods)
+
+        if "<" in path or ">" in path:
             self._add_dynamic_route(path=path, methods=methods, view=view)
         else:
             self._add_static_route(path=path, methods=methods, view=view)
 
-    def _prepare_methods(self, methods):
+    def _prepare_methods(self, path, methods):
         if methods is None:
             return ["GET"]
 
-        normalized_methods = {method.upper()for method in methods}
+        if isinstance(methods, str):
+            raise InvalidRouteError(
+                path=path,
+                message="Route methods must be provided as an iterable of methods names, not as a single string."
+            )
+
+        try:
+            method_items = list(methods)
+        except TypeError as error:
+            raise InvalidRouteError(
+                path=path,
+                message="Route methods must be iterable"
+            ) from error
+
+        if not method_items:
+            raise InvalidRouteError(
+                path=path,
+                message="At least one HTTP method must be provided."
+            )
+
+        normalized_methods = set()
+
+        for method in method_items:
+            if not isinstance(method, str):
+                raise InvalidRouteError(
+                    path=path,
+                    message="Every HTTP method must be text"
+                )
+
+            normalized_method = method.strip().upper()
+
+            if not normalized_method:
+                raise InvalidRouteError(
+                    path=path,
+                    message="HTTP method names cannot be empty or whitespace."
+                )
+
+            normalized_methods.add(normalized_method)
+
         return normalized_methods
+
+    def _validate_path(self, path):
+        if not isinstance(path, str):
+            raise InvalidRouteError(
+                path=path,
+                message="The route path must be text."
+            )
+
+        if not path.startswith("/"):
+            raise InvalidRouteError(
+                path=path,
+                message="The route must start with '/'."
+            )
+
+    def _validate_view(self, path, view):
+        if not callable(view):
+            raise InvalidRouteError(
+                path=path,
+                message="The route view must be callable."
+            )
 
     def _add_static_route(self, path, view, methods):
         registered_methods = self.static_routes.setdefault(path, {})

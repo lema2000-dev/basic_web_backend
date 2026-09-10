@@ -211,3 +211,38 @@ def test_static_file_handler_can_serve_attachment(
             ),
         },
     )
+
+def test_static_handler_propagates_permission_error(
+    tmp_path,
+    monkeypatch,
+):
+    static_folder = tmp_path / "static"
+    static_folder.mkdir()
+
+    static_file = (
+        static_folder / "style.css"
+    )
+    static_file.write_text(
+        "body {}",
+        encoding="utf-8",
+    )
+
+    handler = StaticFileHandler(
+        static_folder=static_folder
+    )
+
+    def raise_permission_error(**kwargs):
+        raise PermissionError(
+            "The file cannot be read"
+        )
+
+    monkeypatch.setattr(
+        "basic_web_backend.static.file_response",
+        raise_permission_error,
+    )
+
+    with pytest.raises(
+        PermissionError,
+        match="The file cannot be read",
+    ):
+        handler.serve("style.css")

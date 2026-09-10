@@ -1,4 +1,5 @@
 import pytest
+import re
 
 from basic_web_backend.adapters import LemaRequestAdapter, LemaResponseAdapter
 from basic_web_backend.config import ApplicationConfig
@@ -11,10 +12,12 @@ def test_application_config_uses_default_adapters():
 
 def test_application_config_accepts_custom_adapters():
     class CustomRequestAdapter:
-        pass
+        def convert(self, server_request):
+            return server_request
 
     class CustomResponseAdapter:
-        pass
+        def convert(self, response):
+            return response
 
     custom_request_adapter = CustomRequestAdapter()
     custom_response_adapter = CustomResponseAdapter()
@@ -108,4 +111,66 @@ def test_config_has_default_template_settings():
     assert config.template_autoescape is True
     assert config.template_cache is True
     assert config.template_auto_reload is False
-    
+
+def test_config_rejects_request_adapter_without_convert():
+    class InvalidRequestAdapter:
+        pass
+
+    expected_message = (
+        "request_adapter must have a callable "
+        "'convert' method"
+    )
+
+    with pytest.raises(TypeError, match=re.escape(expected_message)):
+        ApplicationConfig(request_adapter=InvalidRequestAdapter())
+
+def test_config_rejects_response_adapter_without_convert():
+    class InvalidResponseAdapter:
+        pass
+
+    expected_message = (
+        "response_adapter must have a callable "
+        "'convert' method"
+    )
+
+    with pytest.raises(TypeError, match=re.escape(expected_message)):
+        ApplicationConfig(response_adapter=InvalidResponseAdapter())
+
+def test_config_rejects_non_callable_convert_attribute():
+    class InvalidRequestAdapter:
+        convert = "not callable"
+
+    expected_message = (
+        "request_adapter must have a callable "
+        "'convert' method"
+    )
+
+    with pytest.raises(TypeError, match=re.escape(expected_message)):
+        ApplicationConfig(request_adapter=InvalidRequestAdapter())
+
+def test_config_has_default_logging_settings():
+    config = ApplicationConfig()
+
+    assert config.logger_name == "basic_web_backend"
+    assert config.log_file is None
+    assert config.log_level == "INFO"
+    assert config.log_max_bytes == 1_000_000
+    assert config.log_backup_count == 5
+
+def test_config_accepts_custom_logging_settings(tmp_path):
+    log_file = tmp_path / "backend.log"
+
+    config = ApplicationConfig(
+        logger_name="test.backend",
+        log_file=log_file,
+        log_level="ERROR",
+        log_max_bytes=2000,
+        log_backup_count=2,
+    )
+
+    assert config.logger_name == "test.backend"
+    assert config.log_file == log_file
+    assert config.log_level == "ERROR"
+    assert config.log_max_bytes == 2000
+    assert config.log_backup_count == 2
+  

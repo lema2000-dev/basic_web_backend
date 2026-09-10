@@ -22,8 +22,8 @@ class StaticFileHandler:
 
         try:
             return file_response(file_path=file_path, status_code=status_code, headers=headers, as_attachment=as_attachment, download_name=download_name)
-        except (FileNotFoundError, PermissionError, IsADirectoryError):
-            raise NotFound(path=filename)
+        except (FileNotFoundError, IsADirectoryError) as error:
+            raise NotFound(path=filename) from error
 
         
 

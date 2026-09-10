@@ -35,4 +35,6 @@ docs_private/
 .env.*
 
 #Logging
+logs/
 *.log
+*.log.

@@ -2,6 +2,7 @@ import pytest
 
 from basic_web_backend.exceptions import TemplateNotFound
 from basic_web_backend.template.environment import TemplateEnvironment
+from basic_web_backend.exceptions import TemplateLoadError
 
 def test_enviroment_renders_template_file(tmp_path):
     template_folder = tmp_path / "templates"
@@ -142,3 +143,203 @@ def test_enviroment_clears_complete_cache(tmp_path):
 
     assert enviroment.render("first.html") == "First new"
     assert enviroment.render("second.html") == "Second new"
+
+def test_environment_wraps_template_decode_error(
+    tmp_path,
+):
+    template_folder = tmp_path / "templates"
+    template_folder.mkdir()
+
+    template_file = (
+        template_folder / "invalid.html"
+    )
+
+    template_file.write_bytes(
+        b"\xff\xfe\xfa"
+    )
+
+    environment = TemplateEnvironment(
+        template_folder=template_folder,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        TemplateLoadError
+    ) as error_info:
+        environment.render(
+            "invalid.html"
+        )
+
+    error = error_info.value
+
+    assert error.template_name == (
+        "invalid.html"
+    )
+    assert isinstance(
+        error.__cause__,
+        UnicodeDecodeError,
+    )
+
+def test_environment_wraps_template_permission_error(
+    tmp_path,
+    monkeypatch,
+):
+    template_folder = tmp_path / "templates"
+    template_folder.mkdir()
+
+    template_file = (
+        template_folder / "page.html"
+    )
+    template_file.write_text(
+        "<h1>Hello</h1>",
+        encoding="utf-8",
+    )
+
+    environment = TemplateEnvironment(
+        template_folder=template_folder,
+    )
+
+    def raise_permission_error(
+        self,
+        *args,
+        **kwargs,
+    ):
+        raise PermissionError(
+            "Template access denied"
+        )
+
+    monkeypatch.setattr(
+        type(template_file),
+        "read_text",
+        raise_permission_error,
+    )
+
+    with pytest.raises(
+        TemplateLoadError
+    ) as error_info:
+        environment.render("page.html")
+
+    error = error_info.value
+
+    assert error.template_name == "page.html"
+    assert isinstance(
+        error.__cause__,
+        PermissionError,
+    )
+    assert "Template access denied" in str(error)
+
+def test_environment_wraps_cache_stat_error(
+    tmp_path,
+    monkeypatch,
+):
+    template_folder = tmp_path / "templates"
+    template_folder.mkdir()
+
+    template_file = (
+        template_folder / "page.html"
+    )
+    template_file.write_text(
+        "<h1>Hello</h1>",
+        encoding="utf-8",
+    )
+
+    environment = TemplateEnvironment(
+        template_folder=template_folder,
+        cache_enabled=True,
+    )
+
+    template_path = (
+        environment._resolve_template_path(
+            "page.html"
+        )
+    )
+
+    def raise_stat_error(
+        self,
+        *args,
+        **kwargs,
+    ):
+        raise OSError(
+            "File status unavailable"
+        )
+
+    monkeypatch.setattr(
+        type(template_path),
+        "stat",
+        raise_stat_error,
+    )
+
+    with pytest.raises(
+        TemplateLoadError
+    ) as error_info:
+        environment._get_template_nodes(
+            template_name="page.html",
+            template_path=template_path,
+        )
+
+    error = error_info.value
+
+    assert error.template_name == "page.html"
+    assert isinstance(
+        error.__cause__,
+        OSError,
+    )
+    assert "File status unavailable" in str(error)
+
+def test_environment_wraps_auto_reload_stat_error(
+    tmp_path,
+    monkeypatch,
+):
+    template_folder = tmp_path / "templates"
+    template_folder.mkdir()
+
+    template_file = (
+        template_folder / "page.html"
+    )
+    template_file.write_text(
+        "<h1>Hello</h1>",
+        encoding="utf-8",
+    )
+
+    environment = TemplateEnvironment(
+        template_folder=template_folder,
+        cache_enabled=True,
+        auto_reload=True,
+    )
+
+    environment.render("page.html")
+
+    template_path = (
+        environment._resolve_template_path(
+            "page.html"
+        )
+    )
+
+    def raise_stat_error(
+        self,
+        *args,
+        **kwargs,
+    ):
+        raise OSError(
+            "File status unavailable"
+        )
+
+    monkeypatch.setattr(
+        type(template_path),
+        "stat",
+        raise_stat_error,
+    )
+
+    with pytest.raises(
+        TemplateLoadError
+    ) as error_info:
+        environment._get_template_nodes(
+            template_name="page.html",
+            template_path=template_path,
+        )
+
+    assert isinstance(
+        error_info.value.__cause__,
+        OSError,
+    )
+
