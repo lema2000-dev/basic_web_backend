@@ -2,6 +2,7 @@ import codecs
 import logging
 
 from .adapters import LemaRequestAdapter, LemaResponseAdapter
+from .logging_config import LOG_LEVELS
 
 def _validate_adapter(adapter, name):
     convert = getattr(adapter, "convert", None)
@@ -100,15 +101,9 @@ def _validate_log_level(log_level):
 
     normalized_level = log_level.upper()
 
-    level = (
-        logging.getLevelNamesMapping().get(
-            normalized_level
-        )
-    )
-
-    if level is None:
+    if normalized_level not in LOG_LEVELS:
         raise ValueError(
-            f"Invalid log level: {log_level!r}."
+            f"Unknown log level: {log_level}"
         )
 
 class ApplicationConfig:

@@ -2,6 +2,15 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+LOG_LEVELS = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+    "NOTSET": logging.NOTSET,
+}
+
 DEFAULT_LOG_FORMAT = (
     "%(asctime)s "
     "%(levelname)s "
@@ -18,7 +27,7 @@ def create_logger(
 ):
     logger = logging.getLogger(name)
 
-    level = logging.getLevelNamesMapping().get(str(log_level).upper())
+    level = LOG_LEVELS.get(str(log_level).upper())
 
     if level is None:
         raise ValueError(f"Invalid log level: {log_level!r}")
