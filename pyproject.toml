@@ -2,21 +2,64 @@
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
+
 [project]
 name = "lema-basic-web-backend"
 version = "0.1.0"
+description = "A lightweight Python web backend framework with routing, request handling, templates, static files, and configurable server adapters."
+readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Martin Lénárt" },
+]
+keywords = [
+    "web",
+    "backend",
+    "framework",
+    "http",
+    "routing",
+    "template-engine",
+    "web-server",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 dependencies = []
 
+
 [project.optional-dependencies]
+server = [
+    "lema-basic-web-server>=0.1.0,<0.2.0",
+]
 dev = [
     "pytest>=8",
+    "build>=1.2",
+    "twine>=5",
     "lema-basic-web-server>=0.1.0,<0.2.0",
 ]
 
 
+[project.urls]
+Homepage = "https://github.com/lema2000-dev/basic_web_backend"
+Repository = "https://github.com/lema2000-dev/basic_web_backend.git"
+Issues = "https://github.com/lema2000-dev/basic_web_backend/issues"
+
+
+[tool.setuptools]
+include-package-data = true
+
+
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["basic_web_backend*"]
 
 
 [tool.pytest.ini_options]
