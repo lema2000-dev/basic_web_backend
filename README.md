@@ -1,5 +1,10 @@
 # Basic Web Backend
 
+[![PyPI version](https://img.shields.io/pypi/v/lema-basic-web-backend.svg)](https://pypi.org/project/lema-basic-web-backend/)
+[![Python versions](https://img.shields.io/pypi/pyversions/lema-basic-web-backend.svg)](https://pypi.org/project/lema-basic-web-backend/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://github.com/lema2000-dev/basic_web_backend/actions/workflows/tests.yml/badge.svg)](https://github.com/lema2000-dev/basic_web_backend/actions/workflows/tests.yml)
+
 A small Python web backend framework designed to work with
 [`lema-basic-web-server`](https://github.com/lema2000-dev/basic_web_server).
 
